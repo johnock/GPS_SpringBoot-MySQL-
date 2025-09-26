@@ -4,15 +4,11 @@ import jakarta.persistence.*;
 
 @Entity
 @Table(name = "COURSES")
-@SequenceGenerator(
-        name = "COURSES_SEQ",
-        sequenceName = "COURSES_SEQ",
-        allocationSize = 1
-)
+
 public class Course {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "COURSES_SEQ")
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "COURSE_ID")
     private Long id;
 

@@ -1,6 +1,7 @@
 package com.example.findpathserver.model;
 
 import jakarta.persistence.*;
+import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "users")
@@ -20,7 +21,13 @@ public class User {
     private String email;
 
     @Column(nullable = true)
-    private String phoneNum;  // 🔴 추가된 필드
+    private String phoneNum;
+    
+    @Column(name = "reset_token")
+    private String resetToken;
+
+    @Column(name = "token_expiry_date")
+    private LocalDateTime tokenExpiryDate;
 
     
     // 기본 생성자
@@ -48,4 +55,12 @@ public class User {
     public void setPhoneNum(String phoneNum) { this.phoneNum = phoneNum; }
     
     public Long getId() { return id; }
+    
+    public String getResetToken() { return resetToken; }
+
+    public void setResetToken(String resetToken) { this.resetToken = resetToken; }
+
+    public LocalDateTime getTokenExpiryDate() { return tokenExpiryDate; }
+
+    public void setTokenExpiryDate(LocalDateTime tokenExpiryDate) { this.tokenExpiryDate = tokenExpiryDate; }
 }

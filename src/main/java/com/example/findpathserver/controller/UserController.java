@@ -1,8 +1,8 @@
 package com.example.findpathserver.controller;
 
 import com.example.findpathserver.model.User;
-
 import com.example.findpathserver.repository.UserRepository;
+import com.example.findpathserver.service.EmailService;
 
 import java.util.HashMap;
 import java.util.List;
@@ -16,7 +16,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
-import com.example.findpathserver.service.EmailService; // ✅ EmailService import 추가
+
 import java.util.UUID; // ✅ UUID import 추가
 
 @RestController
@@ -31,6 +31,9 @@ public class UserController {
     
     @Autowired
     private EmailService emailService;
+    
+    
+
 
     // ✅ 회원가입
     @PostMapping("/signup")
@@ -187,6 +190,7 @@ public class UserController {
         }
     }
     
+ 
 
     // ✅ 회원 목록 (테스트용)
     @GetMapping("/list")

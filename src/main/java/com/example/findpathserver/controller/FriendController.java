@@ -1,6 +1,7 @@
 package com.example.findpathserver.controller;
 
 import java.util.HashMap;
+
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -18,20 +19,44 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.example.findpathserver.dto.FriendResponse;
 import com.example.findpathserver.model.Friend;
 import com.example.findpathserver.model.User;
 import com.example.findpathserver.repository.FriendRepository;
 import com.example.findpathserver.repository.UserRepository; // ✅ UserRepository import 추가
+import com.example.findpathserver.service.FriendService;
 
-@RestController // ✅ 1. RestController 어노테이션 추가
-@RequestMapping("/api/friends") // ✅ 2. 친구 전용 API 경로로 수정
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.web.bind.annotation.*;
+
+
+import lombok.RequiredArgsConstructor;
+
+@RestController
+@RequestMapping("/api/friends")
 public class FriendController {
-	
+
+    @Autowired // ✅ 기존 스타일과 동일하게 @Autowired 사용
+    private FriendService friendService;
+
+    @Autowired // ✅ 기존 스타일과 동일하게 @Autowired 사용
+    private UserRepository userRepository;
+
     @Autowired
     private FriendRepository friendRepository;
 
-    @Autowired // ✅ 3. UserRepository 주입 코드 추가
-    private UserRepository userRepository;
+
+    @GetMapping
+    public ResponseEntity<List<FriendResponse>> getMyFriends() {
+        // 토큰에서 현재 로그인한 사용자 정보 가져오기
+        String username = SecurityContextHolder.getContext().getAuthentication().getName();
+        User loggedInUser = userRepository.findByUsername(username)
+                .orElseThrow(() -> new RuntimeException("사용자를 찾을 수 없습니다: " + username));
+
+        // FriendService를 통해 친구 목록 조회
+        List<FriendResponse> friends = friendService.getFriends(loggedInUser);
+        return ResponseEntity.ok(friends);
+    }
 
 	// --- 친구 추가 API (중복 방지 기능 추가) ---
     @PostMapping("/request") // ✅ 4. 경로에서 "/friends" 제거 (상위 경로와 중복)

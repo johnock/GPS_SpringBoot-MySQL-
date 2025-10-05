@@ -36,5 +36,7 @@ public interface FriendRepository extends JpaRepository<Friend, Long> {
     
     List<Friend> findByUserAndFriend(User user, User friend);
     
+    List<Friend> findAllByUserAndStatus(User user, String status);
+    
     
 }

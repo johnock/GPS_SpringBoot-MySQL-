@@ -4,6 +4,8 @@ import com.example.findpathserver.model.User;
 import com.example.findpathserver.repository.UserRepository;
 import com.example.findpathserver.service.EmailService;
 
+import lombok.RequiredArgsConstructor;
+
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -16,82 +18,66 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
+import com.example.findpathserver.config.JwtUtil;
+import com.example.findpathserver.dto.LoginResponse;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+
+
 
 import java.util.UUID; // ✅ UUID import 추가
 
 @RestController
-@RequestMapping("/api/users")
+@RequiredArgsConstructor // ✅ @Autowired 대신 이 어노테이션을 사용합니다.
 public class UserController {
 
-    @Autowired
-    private UserRepository userRepository;
-    
-    @Autowired
-    private PasswordEncoder passwordEncoder;
-    
-    @Autowired
-    private EmailService emailService;
-    
-    
+    // ✅ final 키워드를 추가하여 의존성을 주입합니다.
+    private final UserRepository userRepository;
+    private final PasswordEncoder passwordEncoder;
+    private final EmailService emailService;
+    private final JwtUtil jwtUtil;
 
+    // ✅✅✅ 새로운 로그인 API ✅✅✅
+    @PostMapping("/login")
+    public ResponseEntity<?> login(@RequestBody Map<String, String> credentials) {
+        String username = credentials.get("username");
+        String password = credentials.get("password");
 
-    // ✅ 회원가입
-    @PostMapping("/signup")
+        Optional<User> foundUserOptional = userRepository.findByUsername(username);
+
+        if (foundUserOptional.isPresent() && passwordEncoder.matches(password, foundUserOptional.get().getPassword())) {
+            User foundUser = foundUserOptional.get();
+            // 로그인 성공 시 JWT 토큰 생성
+            final String token = jwtUtil.generateToken(foundUser.getUsername());
+            // 안드로이드가 받을 수 있도록 LoginResponse DTO에 담아 반환
+            return ResponseEntity.ok(new LoginResponse(token));
+        } else {
+            // 로그인 실패 시 간단한 에러 메시지 반환
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("아이디 또는 비밀번호가 일치하지 않습니다.");
+        }
+    }
+
+    // ✅ 회원가입 (경로 수정)
+    @PostMapping("/api/users/signup")
     public ResponseEntity<Map<String, Object>> signup(@RequestBody User user) {
         Map<String, Object> response = new HashMap<>();
-
-        // 1. 아이디(username) 중복 검사
         if (userRepository.findByUsername(user.getUsername()).isPresent()) {
             response.put("status", "fail");
             response.put("message", "이미 사용중인 아이디입니다.");
-            return ResponseEntity.status(HttpStatus.CONFLICT).body(response); // 409 Conflict 상태 코드 반환
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(response);
         }
-
-        // 2. 이메일(email) 중복 검사
         if (userRepository.findByEmail(user.getEmail()).isPresent()) {
             response.put("status", "fail");
             response.put("message", "이미 가입된 이메일입니다.");
             return ResponseEntity.status(HttpStatus.CONFLICT).body(response);
         }
-
-        // 3. 중복이 없으면 비밀번호 암호화 및 저장
         user.setPassword(passwordEncoder.encode(user.getPassword()));
         userRepository.save(user);
-
         response.put("status", "success");
         response.put("message", "회원가입 성공!");
         return ResponseEntity.ok(response);
     }
-    // ✅ 로그인
-
-    @PostMapping("/login")
-    public ResponseEntity<Map<String, Object>> login(@RequestBody User user) {
-        // 1. 요청으로 받은 username을 사용하여 데이터베이스에서 사용자를 찾습니다.
-        Optional<User> foundUserOptional = userRepository.findByUsername(user.getUsername());
-        
-        Map<String, Object> response = new HashMap<>();
-
-        // 2. 사용자가 존재하고, 입력된 비밀번호가 암호화된 비밀번호와 일치하는지 확인합니다.
-        //    - passwordEncoder.matches(평문 비밀번호, 암호화된 비밀번호)
-        if (foundUserOptional.isPresent() && passwordEncoder.matches(user.getPassword(), foundUserOptional.get().getPassword())) {
-            
-            // 3. 로그인 성공 시
-            User foundUser = foundUserOptional.get();
-            response.put("status", "success");
-            response.put("message", "로그인 성공");
-            response.put("username", foundUser.getUsername());
-            response.put("email", foundUser.getEmail());
-            // 필요한 경우 다른 사용자 정보를 추가할 수 있습니다.
-            
-            return ResponseEntity.ok(response);
-        } else {
-            // 4. 로그인 실패 시 (아이디가 없거나 비밀번호가 틀린 경우)
-            response.put("status", "error");
-            response.put("message", "아이디 또는 비밀번호가 일치하지 않습니다.");
-            
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(response); // 401 Unauthorized 상태와 에러 메시지를 보냅니다.
-        }
-    }
+    
     
     @PostMapping("/find-id")
     public ResponseEntity<Map<String, Object>> findIdByEmail(@RequestBody Map<String, String> request) {

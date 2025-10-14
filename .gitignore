@@ -1,0 +1,42 @@
+# === Maven / Build ===
+/target/
+**/target/
+
+# Maven Wrapper (유지 권장: 커밋)
+!.mvn/wrapper/maven-wrapper.jar
+!.mvn/wrapper/maven-wrapper.properties
+mvnw
+mvnw.cmd
+
+# === STS / Eclipse ===
+.apt_generated
+.classpath
+.factorypath
+.project
+.settings/
+.springBeans
+.sts4-cache
+
+# === IntelliJ IDEA ===
+.idea/
+*.iws
+*.iml
+*.ipr
+out/
+
+# === NetBeans ===
+/nbproject/private/
+/nbbuild/
+/dist/
+/nbdist/
+/.nb-gradle/
+build/
+**/build/
+
+# === VS Code ===
+.vscode/
+
+# === OS & Logs ===
+.DS_Store
+Thumbs.db
+*.log

@@ -78,7 +78,6 @@ public class UserController {
         }
     }
     
-    // [추가] 로그아웃 API
     @PostMapping("/api/users/logout")
     public ResponseEntity<?> logout() {
         // 현재 인증된 사용자 정보 가져오기
@@ -93,7 +92,11 @@ public class UserController {
 
         // DB에서 해당 유저의 활성 토큰을 null로 변경
         userRepository.findByUsername(username).ifPresent(user -> {
-            user.setCurrentActiveToken(null); // 토큰 무효화
+            user.setCurrentActiveToken(null); // 1. 활성 토큰 무효화
+            
+            // [추가] 자동 로그인을 위한 Refresh Token도 함께 무효화합니다.
+            user.setCurrentRefreshToken(null); 
+            
             userRepository.save(user);
         });
 

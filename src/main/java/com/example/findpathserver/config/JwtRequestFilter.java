@@ -1,6 +1,8 @@
 package com.example.findpathserver.config;
 
 import com.example.findpathserver.service.MyUserDetailsService;
+import com.example.findpathserver.repository.UserRepository;
+// import lombok.RequiredArgsConstructor; // (Autowired를 사용하므로 이 import는 필요 없습니다)
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -27,6 +29,9 @@ public class JwtRequestFilter extends OncePerRequestFilter {
     @Autowired
     private JwtUtil jwtUtil;
     
+    @Autowired
+    private UserRepository userRepository;
+    
     // 🟢 [수정] 토큰 검증을 건너뛸 경로 목록에 "/login" 추가
     private static final String[] AUTH_WHITELIST = {
         "/login",                       // 👈 로그인 요청 경로 추가
@@ -34,7 +39,8 @@ public class JwtRequestFilter extends OncePerRequestFilter {
         "/api/users/login",
         "/send-verification-code", 
         "/verify-code", 
-        "/reset-password"
+        "/reset-password",
+        "/api/auth/refresh" // 👈 [추가] 토큰 재발급 경로도 검증을 건너뛰어야 합니다.
     };
     
     // 해당 요청이 토큰 검증이 필요 없는 경로인지 확인합니다.
@@ -42,7 +48,7 @@ public class JwtRequestFilter extends OncePerRequestFilter {
         String requestUri = request.getRequestURI();
         for (String url : AUTH_WHITELIST) {
             // 경로가 리스트의 URL로 시작하는지 확인
-            if (requestUri.startsWith(url)) {
+            if (requestUri.startsWith(request.getContextPath() + url)) { // contextPath를 포함하여 비교
                 return true;
             }
         }
@@ -90,8 +96,19 @@ public class JwtRequestFilter extends OncePerRequestFilter {
         if (username != null && SecurityContextHolder.getContext().getAuthentication() == null) {
 
             UserDetails userDetails = this.userDetailsService.loadUserByUsername(username);
+            
+            // [오류 해결 1] 람다에서 사용할 final 변수 (이 변수는 올바르게 추가하셨습니다)
+            final String finalJwt = jwt;
+            
+            // [핵심 수정] DB에 저장된 활성 토큰과 일치하는지 확인
+            boolean isTokenValidInDb = userRepository.findByUsername(username)
+                    // [오류 해결 2] 람다 내부에서 'jwt' 대신 'finalJwt'를 사용해야 합니다.
+                    .map(user -> user.getCurrentActiveToken() != null && user.getCurrentActiveToken().equals(finalJwt))
+                    .orElse(false);
 
-            if (jwtUtil.validateToken(jwt, userDetails.getUsername())) {
+            // [오류 해결 3] 'jwt' 대신 'finalJwt'를 사용하고,
+            // [기능 추가] 동시 접속 제어를 위해 DB 토큰 유효성(isTokenValidInDb)도 함께 검증합니다.
+            if (jwtUtil.validateToken(finalJwt, userDetails.getUsername()) && isTokenValidInDb) {
 
                 UsernamePasswordAuthenticationToken usernamePasswordAuthenticationToken = new UsernamePasswordAuthenticationToken(
                         userDetails, null, userDetails.getAuthorities());

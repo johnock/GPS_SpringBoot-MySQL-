@@ -46,6 +46,7 @@ public class SecurityConfig {
                             "/login",                 // 👈 클라이언트가 실제로 사용하는 로그인 경로 추가
                             "/api/users/signup", 
                             "/api/users/login",       // 기존 경로 유지
+                            "/api/auth/refresh", 	//  토큰 재발급 경로는 인증 없이 허용
                             "/send-verification-code", 
                             "/verify-code", 
                             "/reset-password"

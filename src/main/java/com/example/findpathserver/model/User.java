@@ -2,6 +2,8 @@ package com.example.findpathserver.model;
 
 import jakarta.persistence.*;
 import java.time.LocalDateTime;
+import jakarta.persistence.Column;
+
 
 
 @Entity
@@ -30,7 +32,12 @@ public class User {
 
     @Column(name = "token_expiry_date")
     private LocalDateTime tokenExpiryDate;
+    
+    @Column(length = 512) // 활성화 토큰
+    private String currentActiveToken;
 
+    @Column(length = 512)
+    private String currentRefreshToken;
     
     // 기본 생성자
     public User() {}
@@ -59,10 +66,14 @@ public class User {
     public Long getId() { return id; }
     
     public String getResetToken() { return resetToken; }
-
     public void setResetToken(String resetToken) { this.resetToken = resetToken; }
 
     public LocalDateTime getTokenExpiryDate() { return tokenExpiryDate; }
-
     public void setTokenExpiryDate(LocalDateTime tokenExpiryDate) { this.tokenExpiryDate = tokenExpiryDate; }
+    
+    public String getCurrentActiveToken() { return currentActiveToken; }
+    public void setCurrentActiveToken(String currentActiveToken) { this.currentActiveToken = currentActiveToken; }
+    
+    public String getCurrentRefreshToken() { return currentRefreshToken; }
+    public void setCurrentRefreshToken(String currentRefreshToken) { this.currentRefreshToken = currentRefreshToken; }
 }

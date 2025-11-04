@@ -20,6 +20,10 @@ import com.example.findpathserver.config.JwtUtil;
 import com.example.findpathserver.dto.LoginResponse;
 import org.springframework.security.authentication.AuthenticationManager; // (사용되지 않지만 기존 코드에 따라 유지)
 
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.userdetails.UserDetails;
+import java.util.Collections;
+
 import java.util.UUID; 
 
 // ⭐ [수정] 기본 RequestMapping 제거하고 개별 API에 경로 재설정
@@ -40,19 +44,60 @@ public class UserController {
     public ResponseEntity<?> login(@RequestBody Map<String, String> credentials) {
         String username = credentials.get("username");
         String password = credentials.get("password");
+        
+        boolean rememberMe = Boolean.parseBoolean(credentials.getOrDefault("rememberMe", "false"));
 
         Optional<User> foundUserOptional = userRepository.findByUsername(username);
 
         if (foundUserOptional.isPresent() && passwordEncoder.matches(password, foundUserOptional.get().getPassword())) {
             User foundUser = foundUserOptional.get();
             // 로그인 성공 시 JWT 토큰 생성
-            final String token = jwtUtil.generateToken(foundUser.getUsername());
+            final String accessToken = jwtUtil.generateAccessToken(foundUser.getUsername());
+            String refreshToken = null;
+            
+            // 2. [추가] 새 토큰을 DB에 저장 (동시 접속 제어)
+            foundUser.setCurrentActiveToken(accessToken);
+            
+            if (rememberMe) {
+                // 2. [추가] 자동 로그인 체크 시 Refresh Token 발급 및 DB 저장
+                refreshToken = jwtUtil.generateRefreshToken(foundUser.getUsername());
+                foundUser.setCurrentRefreshToken(refreshToken);
+            } else {
+                // 3. 자동 로그인 미체크 시 기존 Refresh Token 삭제
+                foundUser.setCurrentRefreshToken(null);
+            }
+            
+            userRepository.save(foundUser);
+
+            
             // 안드로이드가 받을 수 있도록 LoginResponse DTO에 담아 반환
-            return ResponseEntity.ok(new LoginResponse(token));
+            return ResponseEntity.ok(new LoginResponse(accessToken, refreshToken));
         } else {
             // 로그인 실패 시 간단한 에러 메시지 반환
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("아이디 또는 비밀번호가 일치하지 않습니다.");
         }
+    }
+    
+    // [추가] 로그아웃 API
+    @PostMapping("/api/users/logout")
+    public ResponseEntity<?> logout() {
+        // 현재 인증된 사용자 정보 가져오기
+        Object principal = SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+        String username = null;
+
+        if (principal instanceof UserDetails) {
+            username = ((UserDetails)principal).getUsername();
+        } else {
+            username = principal.toString();
+        }
+
+        // DB에서 해당 유저의 활성 토큰을 null로 변경
+        userRepository.findByUsername(username).ifPresent(user -> {
+            user.setCurrentActiveToken(null); // 토큰 무효화
+            userRepository.save(user);
+        });
+
+        return ResponseEntity.ok(Collections.singletonMap("message", "로그아웃 되었습니다."));
     }
 
     // ✅✅✅ 2. 회원가입 API (경로: /signup) - 경로 수정
@@ -180,6 +225,39 @@ public class UserController {
             response.put("status", "error");
             response.put("message", "유효하지 않거나 만료된 토큰입니다. 다시 시도해주세요.");
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+        }
+    }
+    
+ // [추가] 토큰 재발급 API
+    @PostMapping("/api/auth/refresh")
+    public ResponseEntity<?> refreshToken(@RequestBody Map<String, String> request) {
+        String refreshToken = request.get("refreshToken");
+        
+        try {
+            if (refreshToken == null || jwtUtil.isTokenExpired(refreshToken)) {
+                throw new Exception("Invalid or expired refresh token");
+            }
+            
+            String username = jwtUtil.extractUsername(refreshToken);
+            User user = userRepository.findByUsername(username)
+                    .orElseThrow(() -> new Exception("User not found"));
+
+            // DB에 저장된 Refresh Token과 일치하는지 확인
+            if (!refreshToken.equals(user.getCurrentRefreshToken())) {
+                throw new Exception("Refresh token mismatch");
+            }
+
+            // 새 Access Token 발급
+            String newAccessToken = jwtUtil.generateAccessToken(username);
+            // 새 Access Token을 DB에 저장 (동시 접속 제어)
+            user.setCurrentActiveToken(newAccessToken);
+            userRepository.save(user);
+
+            // 새 Access Token만 반환 (Refresh Token은 유지)
+            return ResponseEntity.ok(new LoginResponse(newAccessToken, refreshToken));
+
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Invalid refresh token");
         }
     }
     

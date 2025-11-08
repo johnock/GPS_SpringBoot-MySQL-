@@ -15,6 +15,7 @@ public class LocationResponse {
     private Double latitude;
     private Double longitude;
     private LocalDateTime lastUpdatedAt;
+    private String profileImageUrl; // 👈 [필드 추가]
 
     // UserLocation 모델을 이 DTO로 변환하는 생성자
     public LocationResponse(UserLocation userLocation) {

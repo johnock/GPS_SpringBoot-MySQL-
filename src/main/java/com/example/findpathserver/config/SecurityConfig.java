@@ -51,6 +51,7 @@ public class SecurityConfig {
                             "/verify-code", 
                             "/reset-password"
                         ).permitAll() // 이 목록의 경로는 모두 인증 없이 허용
+                        .requestMatchers("/uploads/**").permitAll() // 👈 [이 줄을 추가합니다]
                         
                         // 나머지 모든 요청은 반드시 인증(로그인)을 거쳐야 함
                         .anyRequest().authenticated()

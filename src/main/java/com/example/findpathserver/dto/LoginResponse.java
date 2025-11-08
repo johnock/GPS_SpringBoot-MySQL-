@@ -4,8 +4,10 @@ import lombok.AllArgsConstructor;
 import lombok.Getter;
 
 @Getter
-@AllArgsConstructor
+@AllArgsConstructor // 👈 4개 필드 생성자
 public class LoginResponse {
-    private String accessToken;  // 'token'에서 'accessToken'으로 이름 변경
-    private String refreshToken; // [추가]
+    private String accessToken;
+    private String refreshToken;
+    private String username;
+    private String profileImageUrl;
 }

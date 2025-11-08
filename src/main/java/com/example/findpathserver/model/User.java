@@ -39,6 +39,11 @@ public class User {
     @Column(length = 512)
     private String currentRefreshToken;
     
+    // 👈 [추가 시작]
+    @Column(name = "profile_image_url", nullable = true)
+    private String profileImageUrl;
+    // 👈 [추가 끝]
+    
     // 기본 생성자
     public User() {}
 
@@ -76,4 +81,9 @@ public class User {
     
     public String getCurrentRefreshToken() { return currentRefreshToken; }
     public void setCurrentRefreshToken(String currentRefreshToken) { this.currentRefreshToken = currentRefreshToken; }
+    
+    // 👈 [추가 시작]
+    public String getProfileImageUrl() { return profileImageUrl; }
+    public void setProfileImageUrl(String profileImageUrl) { this.profileImageUrl = profileImageUrl; }
+    // 👈 [추가 끝]
 }

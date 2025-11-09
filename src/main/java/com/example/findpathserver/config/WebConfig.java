@@ -1,28 +1,34 @@
-package com.example.findpathserver.config; // 방금 만든 패키지 경로와 일치해야 합니다.
+package com.example.findpathserver.config; 
 
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.servlet.config.annotation.CorsRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
-//👈 [추가]
+// 🔽 [1. 3개 Import 추가]
 import org.springframework.beans.factory.annotation.Value;
-import java.nio.file.Paths;
 import org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry;
+import java.nio.file.Paths;
+
 
 @Configuration
 public class WebConfig implements WebMvcConfigurer {
 
-	// 👈 [추가 시작]
+    // 🔽 [2. 파일 경로 주입]
     @Value("${file.upload-dir}")
     private String uploadDir;
 
+    // 🔽 [3. 리소스 핸들러 추가]
+    /**
+     * '/media/profiles/...' URL로 오는 요청을
+     * 실제 물리적 폴더 'file:./uploads/...'로 연결합니다.
+     */
     @Override
     public void addResourceHandlers(ResourceHandlerRegistry registry) {
-        registry.addResourceHandler("/uploads/**")
-            .addResourceLocations("file:" + uploadDir + "/");
+        registry.addResourceHandler("/media/profiles/**") 
+                .addResourceLocations("file:" + uploadDir + "/");
     }
-    // 👈 [추가 끝]
-	
+    // 🔼 [추가 완료]
+
     @Override
     public void addCorsMappings(CorsRegistry registry) {
         registry.addMapping("/**") // 모든 경로에 대해

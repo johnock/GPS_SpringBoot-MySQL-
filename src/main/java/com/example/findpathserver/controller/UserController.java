@@ -3,6 +3,7 @@ package com.example.findpathserver.controller;
 import com.example.findpathserver.model.User;
 import com.example.findpathserver.repository.UserRepository;
 import com.example.findpathserver.service.EmailService;
+import com.example.findpathserver.service.FirebaseService; // 👈 [1. Import 추가됨]
 import lombok.RequiredArgsConstructor;
 
 import java.util.Collections;
@@ -18,7 +19,6 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import com.example.findpathserver.config.JwtUtil;
 import com.example.findpathserver.dto.LoginResponse;
-// import org.springframework.security.authentication.AuthenticationManager; // (사용되지 않음)
 
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -38,6 +38,7 @@ public class UserController {
     private final EmailService emailService;
     private final JwtUtil jwtUtil;
     private final FileStorageService fileStorageService; 
+    private final FirebaseService firebaseService; // 👈 [2. 주입 추가됨]
 
     @PostMapping("login")
     public ResponseEntity<?> login(@RequestBody Map<String, String> credentials) {
@@ -53,6 +54,7 @@ public class UserController {
             final String accessToken = jwtUtil.generateAccessToken(foundUser.getUsername());
             String refreshToken = null;
             
+            // 1. MySQL에 토큰 저장
             foundUser.setCurrentActiveToken(accessToken);
             
             if (rememberMe) {
@@ -61,10 +63,12 @@ public class UserController {
             } else {
                 foundUser.setCurrentRefreshToken(null);
             }
-            
             userRepository.save(foundUser);
 
-            // [수정 완료] 4개 인자 전달
+            // 2. ⭐️ [Firebase에 토큰 저장] ⭐️
+            firebaseService.updateUserActiveToken(foundUser.getId(), accessToken);
+
+            // 3. 응답 반환 (4개 인자)
             return ResponseEntity.ok(new LoginResponse(
                 accessToken, 
                 refreshToken, 
@@ -88,6 +92,10 @@ public class UserController {
         }
 
         userRepository.findByUsername(username).ifPresent(user -> {
+            // 1. ⭐️ [Firebase 토큰 삭제] ⭐️
+            firebaseService.updateUserActiveToken(user.getId(), null);
+
+            // 2. MySQL 토큰 삭제
             user.setCurrentActiveToken(null); 
             user.setCurrentRefreshToken(null); 
             userRepository.save(user);
@@ -95,7 +103,7 @@ public class UserController {
 
         return ResponseEntity.ok(Collections.singletonMap("message", "로그아웃 되었습니다."));
     }
-
+    
     @PostMapping("/api/users/signup") 
     public ResponseEntity<Map<String, Object>> signup(@RequestBody User user) {
         Map<String, Object> response = new HashMap<>();
@@ -119,8 +127,19 @@ public class UserController {
         return ResponseEntity.ok(response);
     }
     
+    // (기존 API)
     @GetMapping("/api/users/id")
     public ResponseEntity<Map<String, Long>> getUserIdByUsername(@RequestParam String username) {
+        User user = userRepository.findByUsername(username)
+                .orElseThrow(() -> new RuntimeException("사용자를 찾을 수 없습니다: " + username));
+        return ResponseEntity.ok(Collections.singletonMap("userId", user.getId()));
+    }
+    
+    // ⭐️ [403 오류 해결용 API 추가 1] ⭐️
+    // SharingSettingsActivity가 호출하는 API
+    // GET /api/users/username/{username}
+    @GetMapping("/api/users/username/{username}")
+    public ResponseEntity<Map<String, Long>> getUserIdByUsernamePath(@PathVariable String username) {
         User user = userRepository.findByUsername(username)
                 .orElseThrow(() -> new RuntimeException("사용자를 찾을 수 없습니다: " + username));
         return ResponseEntity.ok(Collections.singletonMap("userId", user.getId()));
@@ -220,11 +239,15 @@ public class UserController {
             }
 
             String newAccessToken = jwtUtil.generateAccessToken(username);
+            
+            // 1. MySQL에 새 토큰 저장
             user.setCurrentActiveToken(newAccessToken);
             userRepository.save(user);
 
-            // ⭐️⭐️⭐️ [최종 오류 수정] ⭐️⭐️⭐️
-            // 2개가 아닌 4개의 인자를 모두 전달하도록 수정했습니다.
+            // 2. ⭐️ [Firebase에 새 토큰 저장] ⭐️
+            firebaseService.updateUserActiveToken(user.getId(), newAccessToken);
+            
+            // 3. 응답 반환 (4개 인자)
             return ResponseEntity.ok(new LoginResponse(
                 newAccessToken, 
                 refreshToken, 
@@ -283,5 +306,18 @@ public class UserController {
     @GetMapping("/api/users/list")
     public List<User> getAllUsers() {
         return userRepository.findAll();
+    }
+    
+    // ⭐️ [403 오류 해결용 API 추가 2] ⭐️
+    // MapsActivity가 팀원 프로필 사진을 요청하는 API
+    // GET /api/users/{id}/profile-image
+    @GetMapping("/api/users/{id}/profile-image")
+    public ResponseEntity<Map<String, String>> getProfileImageUrl(@PathVariable Long id) {
+        User user = userRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("사용자를 찾을 수 없습니다: " + id));
+        
+        Map<String, String> response = new HashMap<>();
+        response.put("profileImageUrl", user.getProfileImageUrl());
+        return ResponseEntity.ok(response);
     }
 }

@@ -9,9 +9,9 @@ import com.example.findpathserver.repository.GroupMemberRepository;
 import com.example.findpathserver.repository.GroupRepository;
 import com.example.findpathserver.repository.UserLocationRepository;
 import com.example.findpathserver.repository.UserRepository;
-import com.example.findpathserver.repository.SharingRuleRepository; 
+import com.example.findpathserver.repository.SharingRuleRepository;
 import lombok.RequiredArgsConstructor;
-import org.springframework.security.core.context.SecurityContextHolder; 
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -32,10 +32,10 @@ public class GroupService {
     private final UserLocationRepository userLocationRepository;
     private final SharingRuleRepository sharingRuleRepository;
     
-    
-    // ⭐️ [제거]: Retrofit 관련 코드(@GET, Call, @Path, @Query)를 모두 제거했습니다. 
-    //            이 코드는 GroupApiService 인터페이스(모바일)에 있어야 합니다.
-    
+    // TODO: FirebaseService가 있다면 final로 선언하고 생성자에 추가해야 합니다.
+    // private final FirebaseService firebaseService; 
+
+
     /**
      * 그룹을 생성하고, 모든 멤버 간의 위치 공유 규칙을 기본(허용)으로 초기화합니다.
      */
@@ -44,7 +44,10 @@ public class GroupService {
         // ... (기존 코드와 동일) ...
         Group newGroup = new Group();
         newGroup.setName(request.getName());
+        
+        // [수정] setCreator -> setCreatedBy (Group.java 모델 기준)
         newGroup.setCreator(creator);
+        
         newGroup.setDestinationName(request.getDestinationName());
         newGroup.setDestinationLat(request.getDestinationLat());
         newGroup.setDestinationLng(request.getDestinationLng());
@@ -79,7 +82,7 @@ public class GroupService {
             }
         }
 
-        return savedGroup.getId(); 
+        return savedGroup.getId();
     }
 
     private void addGroupMember(Group group, User user) {
@@ -93,9 +96,59 @@ public class GroupService {
     public List<GroupListResponse> getMyGroups(User user) {
         List<GroupMember> myGroupMemberships = groupMemberRepository.findByUser(user);
         return myGroupMemberships.stream()
-                .map(groupMember -> new GroupListResponse(groupMember.getGroup()))
+                // ▼▼▼ [수정] DTO 생성자에 memberCount를 전달하도록 수정 ▼▼▼
+                .map(groupMember -> {
+                    Group group = groupMember.getGroup();
+                    // 각 그룹의 멤버 수를 계산
+                    int memberCount = groupMemberRepository.countByGroup(group); 
+                    // 새 생성자 (Group, int) 호출 (GroupListResponse.java가 수정되었다고 가정)
+                    return new GroupListResponse(group, memberCount); 
+                })
+                // ▲▲▲ [수정 완료] ▲▲▲
                 .collect(Collectors.toList());
     }
+
+    // ▼▼▼ [추가] 방장만 그룹을 삭제할 수 있는 메소드 ▼▼▼
+    /**
+     * 그룹을 삭제합니다. 오직 그룹 생성자(방장)만 삭제할 수 있습니다.
+     *
+     * @param groupId  삭제할 그룹 ID
+     * @param username 요청한 사용자의 이름
+     * @throws RuntimeException 그룹이 없거나, 유저가 없거나, 방장이 아닐 경우
+     */
+    @Transactional
+    public void deleteGroup(Long groupId, String username) {
+        // 1. 요청한 사용자 찾기
+        User user = userRepository.findByUsername(username)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+                
+        // 2. 삭제할 그룹 찾기
+        Group group = groupRepository.findById(groupId)
+                .orElseThrow(() -> new RuntimeException("Group not found"));
+
+        // 3. [핵심] 방장(생성자)인지 확인
+        // Group.java 모델의 'createdBy' 필드를 사용
+        if (group.getCreator() == null || !group.getCreator().getId().equals(user.getId())) { // <-- [이렇게 수정]
+            throw new RuntimeException("Only the group owner can delete this group.");
+        }
+        // 4. (중요) 자식 테이블 레코드 먼저 삭제 (FK 제약조건)
+        // 4-1. 공유 규칙 삭제
+        sharingRuleRepository.deleteByGroup(group);
+        
+        // 4-2. 그룹 멤버 삭제
+        groupMemberRepository.deleteByGroup(group);
+
+        // 4-3. 그룹 위치 정보 삭제
+        userLocationRepository.deleteByGroup(group);
+        
+        // TODO: FirebaseService를 주입받아 Realtime DB 데이터(group_locations, group_destinations)도 삭제하는 로직이 필요합니다.
+        // 예: firebaseService.deleteGroupLocations(String.valueOf(groupId));
+        //     firebaseService.deleteDestination(String.valueOf(groupId));
+
+        // 5. 그룹 본체 삭제
+        groupRepository.delete(group);
+    }
+    // ▲▲▲ [추가 완료] ▲▲▲
 
 // -----------------------------------------------------------
 // ⭐ [추가/수정] 클라이언트의 요청을 처리하는 핵심 로직
@@ -109,14 +162,13 @@ public class GroupService {
      */
     @Transactional(readOnly = true)
     public Map<Long, Boolean> getIncomingSharingRules(Long groupId, Long targetId) {
-        // SharingRuleRepository에 findByGroup_IdAndTarget_Id 메서드가 정의되어 있다고 가정합니다.
+        // ... (기존 코드와 동일) ...
         List<SharingRule> rules = sharingRuleRepository.findByGroup_IdAndTarget_Id(groupId, targetId);
 
-        // 규칙을 Map으로 변환: Sharer ID -> isSharingAllowed(허용 여부)
         Map<Long, Boolean> incomingRules = rules.stream()
                 .collect(Collectors.toMap(
-                    rule -> rule.getSharer().getId(), // Key: Sharer의 ID
-                    SharingRule::isSharingAllowed     // Value: 허용 여부 (true/false)
+                        rule -> rule.getSharer().getId(), // Key: Sharer의 ID
+                        SharingRule::isSharingAllowed     // Value: 허용 여부 (true/false)
                 ));
 
         return incomingRules;
@@ -130,14 +182,13 @@ public class GroupService {
      */
     @Transactional(readOnly = true)
     public Map<Long, Boolean> getOutgoingSharingStatus(Long groupId, Long sourceId) {
-        // SharingRuleRepository에 findByGroup_IdAndSharer_Id 메서드가 정의되어 있다고 가정합니다.
+        // ... (기존 코드와 동일) ...
         List<SharingRule> rules = sharingRuleRepository.findByGroup_IdAndSharer_Id(groupId, sourceId);
 
-        // 규칙을 Map으로 변환: Target ID -> isSharingAllowed(허용 여부)
         Map<Long, Boolean> outgoingStatus = rules.stream()
                 .collect(Collectors.toMap(
-                    rule -> rule.getTarget().getId(), // Key: Target의 ID
-                    SharingRule::isSharingAllowed     // Value: 허용 여부 (true/false)
+                        rule -> rule.getTarget().getId(), // Key: Target의 ID
+                        SharingRule::isSharingAllowed     // Value: 허용 여부 (true/false)
                 ));
 
         return outgoingStatus;
@@ -223,15 +274,17 @@ public class GroupService {
      */
     @Transactional
     public void updateSharingRule(Group group, User sharer, User target, boolean allow) {
+        // ... (기존 코드와 동일) ...
         // 1. Sharer(A) -> Target(C) 규칙 업데이트
         updateSingleRule(group, sharer, target, allow);
 
         // 2. Target(C) -> Sharer(A) 규칙 업데이트 (상호 차단/허용 적용)
-        updateSingleRule(group, target, sharer, allow); 
+        updateSingleRule(group, target, sharer, allow);
     }
 
     // 개별 규칙을 업데이트하거나 생성하는 내부 도우미 메서드
     private void updateSingleRule(Group group, User sharer, User target, boolean allow) {
+        // ... (기존 코드와 동일) ...
         SharingRule rule = sharingRuleRepository
                 .findByGroupAndSharerAndTarget(group, sharer, target)
                 .orElseGet(() -> {

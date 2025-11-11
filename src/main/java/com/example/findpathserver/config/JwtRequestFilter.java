@@ -40,7 +40,8 @@ public class JwtRequestFilter extends OncePerRequestFilter {
         "/send-verification-code", 
         "/verify-code", 
         "/reset-password",
-        "/api/auth/refresh" // 👈 [추가] 토큰 재발급 경로도 검증을 건너뛰어야 합니다.
+        "/api/auth/refresh", // 👈 [추가] 토큰 재발급 경로도 검증을 건너뛰어야 합니다.
+        "/media/profiles/"
     };
     
     // 해당 요청이 토큰 검증이 필요 없는 경로인지 확인합니다.

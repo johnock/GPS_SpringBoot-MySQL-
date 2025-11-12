@@ -12,8 +12,19 @@ import org.springframework.stereotype.Service;
 import jakarta.annotation.PostConstruct;
 import java.io.InputStream;
 
+//▼▼▼ [ 1. 필요한 클래스들을 import 합니다 ] ▼▼▼
+import com.google.firebase.database.DatabaseError;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+//▲▲▲ [ 1. Import 완료 ] ▲▲▲
+
 @Service
 public class FirebaseService {
+	
+	// ▼▼▼ [ 2. 클래스 바로 아래에 Logger 필드를 추가합니다 ] ▼▼▼
+    private static final Logger log = LoggerFactory.getLogger(FirebaseService.class);
+    // ▲▲▲ [ 2. 추가 완료 ] ▲▲▲
+	
 
     // application.properties에서 키 파일 경로를 읽어옵니다.
     @Value("${firebase.service-account-key-path:serviceAccountKey.json}")
@@ -50,6 +61,63 @@ public class FirebaseService {
             System.err.println("❌ Firebase Admin SDK 초기화 실패: " + e.getMessage());
         }
     }
+    
+ // ▼▼▼ [ 이 메소드 전체를 새로 추가합니다 ] ▼▼▼
+
+    /**
+     * 그룹 삭제 시 Firebase Realtime DB의 관련 데이터를 모두 삭제합니다.
+     * (GroupService에서 호출될 예정)
+     *
+     * @param groupId 삭제할 그룹의 ID (String)
+     */
+    public void deleteGroupData(String groupId) {
+        if (this.database == null) {
+            // [수정] System.err 대신 log.warn 사용
+            log.warn("Firebase DB가 초기화되지 않아 그룹 데이터 삭제를 건너뜁니다.");
+            return;
+        }
+
+        // ▼▼▼ [ 3. 이 리스너(콜백) 코드를 'try' 블록 위에 새로 추가합니다 ] ▼▼▼
+        /**
+         * Firebase 작업 완료 후 호출될 콜백 리스너입니다.
+         * 성공 또는 실패를 로그에 기록합니다.
+         */
+        DatabaseReference.CompletionListener listener = (databaseError, databaseReference) -> {
+            if (databaseError == null) {
+                // 성공!
+                log.info("✅ Firebase 삭제 확인 (성공): {}", databaseReference.getPath().toString());
+            } else {
+                // 실패!
+                log.error("❌ Firebase 삭제 확인 (실패): {}", databaseReference.getPath().toString());
+                log.error("   > 실패 원인: {}", databaseError.getMessage());
+                log.error("   > (권한 부족, 네트워크 오류, 혹은 Firebase 규칙 위반 가능성 높음)");
+            }
+        };
+        // ▲▲▲ [ 3. 추가 완료 ] ▲▲▲
+
+
+        try {
+            // [수정] System.out 대신 log.info 사용
+            log.info("Firebase에 그룹 {} 데이터 삭제 '요청'을 보냅니다...", groupId);
+
+            // ▼▼▼ [ 4. 'removeValueAsync()'를 'removeValue(listener)'로 변경합니다 ] ▼▼▼
+            
+            // (기존 코드) database.getReference("group_locations").child(groupId).removeValueAsync();
+            database.getReference("group_locations").child(groupId).removeValue(listener);
+
+            // (기존 코드) database.getReference("group_destinations").child(groupId).removeValueAsync();
+            database.getReference("group_destinations").child(groupId).removeValue(listener);
+            
+            // ▲▲▲ [ 4. 변경 완료 ] ▲▲▲
+
+        } catch (Exception e) {
+            // [수정] System.err 대신 log.error 사용
+            log.error("Firebase 삭제 '요청' 자체에 실패했습니다: {}", groupId, e);
+        }
+    }
+    
+
+    // ▲▲▲ [ 여기까지 추가 ] ▲▲▲
 
     /**
      * Firebase Realtime Database에 사용자의 활성 토큰을 업데이트합니다.
@@ -80,4 +148,7 @@ public class FirebaseService {
             System.err.println("❌ Firebase에 토큰 업데이트 실패 (UserId: " + userId + "): " + e.getMessage());
         }
     }
+    
+    
+    
 }

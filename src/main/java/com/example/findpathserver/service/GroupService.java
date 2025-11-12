@@ -22,6 +22,8 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
+
+
 @Service
 @RequiredArgsConstructor
 public class GroupService {
@@ -31,6 +33,7 @@ public class GroupService {
     private final UserRepository userRepository;
     private final UserLocationRepository userLocationRepository;
     private final SharingRuleRepository sharingRuleRepository;
+    private final FirebaseService firebaseService;
     
     // TODO: FirebaseService가 있다면 final로 선언하고 생성자에 추가해야 합니다.
     // private final FirebaseService firebaseService; 
@@ -131,6 +134,13 @@ public class GroupService {
         if (group.getCreator() == null || !group.getCreator().getId().equals(user.getId())) { // <-- [이렇게 수정]
             throw new RuntimeException("Only the group owner can delete this group.");
         }
+        
+        
+        // ▼▼▼ [ 2. 이 부분을 MySQL 삭제 *전에* 새로 추가합니다 ] ▼▼▼
+        // 4. Firebase Realtime DB 데이터 삭제 (group_locations, group_destinations)
+        //    (MySQL 트랜잭션과 연동되지 않으므로, 실패해도 롤백되지는 않습니다.)
+        firebaseService.deleteGroupData(String.valueOf(groupId));
+        // ▲▲▲ [ 2. 추가 완료 ] ▲▲▲
         // 4. (중요) 자식 테이블 레코드 먼저 삭제 (FK 제약조건)
         // 4-1. 공유 규칙 삭제
         sharingRuleRepository.deleteByGroup(group);

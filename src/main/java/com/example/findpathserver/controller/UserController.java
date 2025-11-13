@@ -3,7 +3,7 @@ package com.example.findpathserver.controller;
 import com.example.findpathserver.model.User;
 import com.example.findpathserver.repository.UserRepository;
 import com.example.findpathserver.service.EmailService;
-import com.example.findpathserver.service.FirebaseService; // 👈 [1. Import 추가됨]
+import com.example.findpathserver.service.FirebaseService;
 import lombok.RequiredArgsConstructor;
 
 import java.util.Collections;
@@ -17,17 +17,17 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.security.crypto.password.PasswordEncoder;
-import com.example.findpathserver.config.JwtUtil;
+import com.example.findpathserver.config.JwtUtil; // 👈 config.JwtUtil 확인
 import com.example.findpathserver.dto.LoginResponse;
 
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
 
-import java.util.UUID; 
+import java.util.UUID;
 
-import com.example.findpathserver.service.FileStorageService; 
-import org.springframework.web.multipart.MultipartFile; 
-import org.springframework.security.core.Authentication; 
+import com.example.findpathserver.service.FileStorageService;
+import org.springframework.web.multipart.MultipartFile;
+import org.springframework.security.core.Authentication;
 
 @RestController
 @RequiredArgsConstructor
@@ -37,8 +37,10 @@ public class UserController {
     private final PasswordEncoder passwordEncoder;
     private final EmailService emailService;
     private final JwtUtil jwtUtil;
-    private final FileStorageService fileStorageService; 
-    private final FirebaseService firebaseService; // 👈 [2. 주입 추가됨]
+    private final FileStorageService fileStorageService;
+    private final FirebaseService firebaseService;
+
+    // --- (login, logout, signup 등은 수정 없음) ---
 
     @PostMapping("login")
     public ResponseEntity<?> login(@RequestBody Map<String, String> credentials) {
@@ -126,27 +128,12 @@ public class UserController {
         response.put("message", "회원가입 성공!");
         return ResponseEntity.ok(response);
     }
-    
-    // (기존 API)
-    @GetMapping("/api/users/id")
-    public ResponseEntity<Map<String, Long>> getUserIdByUsername(@RequestParam String username) {
-        User user = userRepository.findByUsername(username)
-                .orElseThrow(() -> new RuntimeException("사용자를 찾을 수 없습니다: " + username));
-        return ResponseEntity.ok(Collections.singletonMap("userId", user.getId()));
-    }
-    
-    // ⭐️ [403 오류 해결용 API 추가 1] ⭐️
-    // SharingSettingsActivity가 호출하는 API
-    // GET /api/users/username/{username}
-    @GetMapping("/api/users/username/{username}")
-    public ResponseEntity<Map<String, Long>> getUserIdByUsernamePath(@PathVariable String username) {
-        User user = userRepository.findByUsername(username)
-                .orElseThrow(() -> new RuntimeException("사용자를 찾을 수 없습니다: " + username));
-        return ResponseEntity.ok(Collections.singletonMap("userId", user.getId()));
-    }
+
+    // --- (비밀번호 찾기, 토큰 재발급 등 수정 없음) ---
     
     @PostMapping("/api/users/find-id")
     public ResponseEntity<Map<String, Object>> findIdByEmail(@RequestBody Map<String, String> request) {
+        // (이하 코드 동일)
         String email = request.get("email");
         Map<String, Object> response = new HashMap<>();
         Optional<User> userOptional = userRepository.findByEmail(email);
@@ -166,6 +153,7 @@ public class UserController {
     
     @PostMapping("/api/users/request-password-reset")
     public ResponseEntity<Map<String, Object>> requestPasswordReset(@RequestBody Map<String, String> request) {
+        // (이하 코드 동일)
         String username = request.get("username");
         String email = request.get("email");
         Map<String, Object> response = new HashMap<>();
@@ -181,8 +169,8 @@ public class UserController {
             String resetLink = "app://reset-password?token=" + token;
             String subject = "[Guide Friends] 비밀번호 재설정 요청";
             String htmlContent = "<h1>비밀번호 재설정 안내</h1>"
-                               + "<p>비밀번호를 재설정하려면 아래 링크를 클릭하세요:</p>"
-                               + "<a href=\"" + resetLink + "\">비밀번호 재설정 링크</a>";
+                                + "<p>비밀번호를 재설정하려면 아래 링크를 클릭하세요:</p>"
+                                + "<a href=\"" + resetLink + "\">비밀번호 재설정 링크</a>";
             
             try {
                 emailService.sendHtmlMessage(user.getEmail(), subject, htmlContent);
@@ -198,6 +186,7 @@ public class UserController {
     
     @PostMapping("/api/users/reset-password")
     public ResponseEntity<Map<String, Object>> resetPassword(@RequestBody Map<String, String> request) {
+        // (이하 코드 동일)
         String token = request.get("token");
         String newPassword = request.get("password");
         Map<String, Object> response = new HashMap<>();
@@ -223,6 +212,7 @@ public class UserController {
     
     @PostMapping("/api/auth/refresh")
     public ResponseEntity<?> refreshToken(@RequestBody Map<String, String> request) {
+        // (이하 코드 동일)
         String refreshToken = request.get("refreshToken");
         
         try {
@@ -260,10 +250,12 @@ public class UserController {
         }
     }
     
+    // --- (프로필 이미지 관련 수정 없음) ---
+
     @PostMapping("/api/users/profile-image")
     public ResponseEntity<Map<String, Object>> uploadProfileImage(
             @RequestParam("image") MultipartFile file) {
-
+        // (이하 코드 동일)
         Map<String, Object> response = new HashMap<>();
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         String currentUsername = authentication.getName();
@@ -289,6 +281,7 @@ public class UserController {
 
     @DeleteMapping("/api/users/profile-image")
     public ResponseEntity<Map<String, Object>> setDefaultProfileImage() {
+        // (이하 코드 동일)
         Map<String, Object> response = new HashMap<>();
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         String currentUsername = authentication.getName();
@@ -308,16 +301,71 @@ public class UserController {
         return userRepository.findAll();
     }
     
-    // ⭐️ [403 오류 해결용 API 추가 2] ⭐️
-    // MapsActivity가 팀원 프로필 사진을 요청하는 API
-    // GET /api/users/{id}/profile-image
     @GetMapping("/api/users/{id}/profile-image")
     public ResponseEntity<Map<String, String>> getProfileImageUrl(@PathVariable Long id) {
+        // (이하 코드 동일)
         User user = userRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("사용자를 찾을 수 없습니다: " + id));
         
         Map<String, String> response = new HashMap<>();
         response.put("profileImageUrl", user.getProfileImageUrl());
         return ResponseEntity.ok(response);
+    }
+
+    // -------------------------------------------------------------------
+    // ⭐️ [핵심 1] "내 ID" 가져오기 (토큰 기반으로 수정)
+    // -------------------------------------------------------------------
+    // (기존) @GetMapping("/api/users/id") ... (@RequestParam String username)
+    // (변경) /api/users/me/id (토큰 사용)
+    @GetMapping("/api/users/me/id")
+    public ResponseEntity<Map<String, Long>> getMyUserId() {
+        // 1. 토큰에서 인증된 사용자 이름 획득
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        String currentUsername = authentication.getName();
+
+        // 2. DB에서 사용자 정보 조회
+        User user = userRepository.findByUsername(currentUsername)
+                .orElseThrow(() -> new RuntimeException("인증된 사용자를 찾을 수 없습니다."));
+        
+        // 3. ID 반환
+        return ResponseEntity.ok(Collections.singletonMap("userId", user.getId()));
+    }
+
+    // -------------------------------------------------------------------
+    // ⭐️ [핵심 2] "내 Email" 가져오기 (403 오류 해결용 API 신규 추가)
+    // -------------------------------------------------------------------
+    @GetMapping("/api/users/me/email")
+    public ResponseEntity<Map<String, String>> getMyEmail() {
+        // 1. 토큰에서 인증된 사용자 이름 획득
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        String currentUsername = authentication.getName();
+        
+        // 2. DB에서 사용자 정보 조회
+        User user = userRepository.findByUsername(currentUsername)
+                .orElseThrow(() -> new RuntimeException("인증된 사용자를 찾을 수 없습니다."));
+
+        // 3. 이메일 정보만 Map에 담아 반환
+        Map<String, String> response = new HashMap<>();
+        response.put("email", user.getEmail());
+        return ResponseEntity.ok(response);
+    }
+
+    // -------------------------------------------------------------------
+    // ⭐️ [참고] 기존의 비보안 API
+    // -------------------------------------------------------------------
+    // 이 API들은 SecurityConfig에서 permitAll()로 허용되었기 때문에 놔두지만,
+    // /me/id 를 사용하는 것이 훨씬 안전합니다.
+    @GetMapping("/api/users/id")
+    public ResponseEntity<Map<String, Long>> getUserIdByUsername(@RequestParam String username) {
+        User user = userRepository.findByUsername(username)
+                .orElseThrow(() -> new RuntimeException("사용자를 찾을 수 없습니다: " + username));
+        return ResponseEntity.ok(Collections.singletonMap("userId", user.getId()));
+    }
+    
+    @GetMapping("/api/users/username/{username}")
+    public ResponseEntity<Map<String, Long>> getUserIdByUsernamePath(@PathVariable String username) {
+        User user = userRepository.findByUsername(username)
+                .orElseThrow(() -> new RuntimeException("사용자를 찾을 수 없습니다: " + username));
+        return ResponseEntity.ok(Collections.singletonMap("userId", user.getId()));
     }
 }

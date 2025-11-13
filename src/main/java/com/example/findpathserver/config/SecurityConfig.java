@@ -37,39 +37,44 @@ public class SecurityConfig {
         return authenticationManagerBuilder.build();
     }
 
+    /*
+     * ⭐️ [삭제]
+     * webSecurityCustomizer() 빈은 삭제합니다.
+     * 정적 리소스도 securityFilterChain 내에서 관리하는 것이 더 명확합니다.
+     */
+    // @Bean
+    // public WebSecurityCustomizer webSecurityCustomizer() { ... }
+
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http.csrf(csrf -> csrf.disable())
                 .authorizeHttpRequests(auth -> auth
-                        // 🟢 인증 없이 접근 가능한 경로 명시
+                        // 🟢 1. 인증 없이 "무조건" 허용되어야 하는 경로들
                         .requestMatchers(
-                            "/login",                 
-                            "/api/users/signup", 
-                            "/api/users/login",       
-                            "/api/auth/refresh", 	
-                            "/send-verification-code", 
-                            "/verify-code", 
-                            "/reset-password",
-                            "/api/users/find-id",
-                            "/api/users/request-password-reset",
-                            
-                            // ⭐️ [403 오류 해결 1] (SharingSettingsActivity)
-                            "/api/users/id",
-                            "/api/users/username/**", 
+                                // --- 정적 리소스 ---
+                                "/static/**",
+                                "/media/**",
+                                "/resources/**",
+                                "/images/**",
+                                
+                                // --- 인증/회원가입 관련 API ---
+                                "/login",
+                                "/api/users/signup",
+                                "/api/users/login",
+                                "/api/auth/refresh",
+                                "/send-verification-code",
+                                "/verify-code",
+                                "/reset-password",
+                                "/api/users/find-id",
+                                "/api/users/request-password-reset"
+                        ).permitAll()
 
-                            // ⭐️ [403 오류 해결 2] (MapsActivity 팀원 프로필 API)
-                            "/api/users/*/profile-image",
-
-                            // ⭐️ [403 오류 해결 3] (Glide 이미지 다운로드)
-                            "/media/profiles/**"
-
-                        ).permitAll() // 이 목록의 경로는 모두 인증 없이 허용
-                        
-                        // 나머지 모든 요청은 반드시 인증(로그인)을 거쳐야 함
+                        // 🟢 2. 그 외 "모든" 요청은 반드시 인증(유효한 JWT)이 필요함
                         .anyRequest().authenticated()
                 )
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS));
 
+        // 🟢 3. JWT 필터는 인증 필터보다 먼저 실행
         http.addFilterBefore(jwtRequestFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();

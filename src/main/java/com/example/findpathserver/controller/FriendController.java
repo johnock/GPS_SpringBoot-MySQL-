@@ -9,7 +9,7 @@ import java.util.stream.Stream;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.context.SecurityContextHolder; 
 import org.springframework.web.bind.annotation.*;
 
 import com.example.findpathserver.dto.FriendResponse;
@@ -23,16 +23,17 @@ import lombok.RequiredArgsConstructor;
 
 @RestController
 @RequestMapping("/api/friends")
-@RequiredArgsConstructor // ⭐ [개선] 생성자 주입을 위해 Lombok 사용
+@RequiredArgsConstructor
 public class FriendController {
 
-    // ⭐ [개선] @Autowired 대신 final 필드와 @RequiredArgsConstructor 사용
     private final FriendService friendService;
     private final UserRepository userRepository;
     private final FriendRepository friendRepository;
-
-
-    // --- 1. 정식 친구 목록 조회 API (기존 getMyFriends) ---
+    
+    /**
+     * 내 친구 목록 (양방향)
+     * GET /api/friends
+     */
     @GetMapping
     public ResponseEntity<List<FriendResponse>> getMyFriends() {
         String username = SecurityContextHolder.getContext().getAuthentication().getName();
@@ -43,31 +44,29 @@ public class FriendController {
         return ResponseEntity.ok(friends);
     }
     
-    // --- 2. 그룹 초대 가능 사용자 목록 조회 API (⭐ [추가] 그룹 생성 화면용) ---
+    /**
+     * 그룹 초대 가능 멤버 (기존 코드)
+     * GET /api/friends/group-members
+     */
     @GetMapping("/group-members") 
     public ResponseEntity<List<User>> getGroupSelectableMembers() {
-        // 토큰에서 현재 로그인한 사용자 정보 가져오기 (인증된 요청만 들어옴)
         String username = SecurityContextHolder.getContext().getAuthentication().getName();
         User loggedInUser = userRepository.findByUsername(username)
                 .orElseThrow(() -> new RuntimeException("사용자를 찾을 수 없습니다: " + username));
 
         User user = loggedInUser;
         
-        // 1. 이미 수락된 친구 (상태 'accepted')
+        // ⭐️ [수정] "accepted" (소문자)
         Stream<User> acceptedFriends1 = friendRepository.findByUserAndStatus(user, "accepted").stream()
                 .map(Friend::getFriend);
         Stream<User> acceptedFriends2 = friendRepository.findByFriendAndStatus(user, "accepted").stream()
                 .map(Friend::getUser);
-        
-        // 2. 내가 요청했으나 'pending' 상태인 사용자 (초대 보냄)
+        // ⭐️ [수정] "pending" (소문자)
         Stream<User> sentPendingUsers = friendRepository.findByUserAndStatus(user, "pending").stream()
                 .map(Friend::getFriend);
-        
-        // 3. 나에게 요청했으나 'pending' 상태인 사용자 (초대 받음)
         Stream<User> receivedPendingUsers = friendRepository.findByFriendAndStatus(user, "pending").stream()
                 .map(Friend::getUser);
 
-        // 모든 스트림을 합치고, 중복을 제거한 후 List<User>로 반환
         List<User> selectableMembers = Stream.of(acceptedFriends1, acceptedFriends2, sentPendingUsers, receivedPendingUsers)
                 .flatMap(s -> s)
                 .distinct()
@@ -76,11 +75,13 @@ public class FriendController {
         return ResponseEntity.ok(selectableMembers);
     }
 
-
-	// --- 친구 추가 API (중복 방지 기능 추가) ---
+    /**
+     * 친구 요청
+     * POST /api/friends/request
+     */
     @PostMapping("/request")
     public ResponseEntity<Map<String, Object>> requestFriend(@RequestBody Map<String, String> request) {
-        String fromUsername = request.get("fromUsername");
+        String fromUsername = SecurityContextHolder.getContext().getAuthentication().getName();
         String toUsername = request.get("toUsername");
         Map<String, Object> response = new HashMap<>();
 
@@ -92,11 +93,10 @@ public class FriendController {
             response.put("message", "사용자를 찾을 수 없습니다.");
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(response);
         }
-
+        
         User fromUser = fromUserOpt.get();
         User toUser = toUserOpt.get();
 
-        // 중복 관계 확인 로직
         List<Friend> request1 = friendRepository.findByUserAndFriend(fromUser, toUser);
         List<Friend> request2 = friendRepository.findByUserAndFriend(toUser, fromUser);
 
@@ -109,7 +109,8 @@ public class FriendController {
         Friend friendRequest = new Friend();
         friendRequest.setUser(fromUser);
         friendRequest.setFriend(toUser);
-        friendRequest.setStatus("pending");
+        // ⭐️ [수정] "pending" (소문자)
+        friendRequest.setStatus("pending"); 
         friendRepository.save(friendRequest);
 
         response.put("status", "success");
@@ -117,11 +118,14 @@ public class FriendController {
         return ResponseEntity.ok(response);
     }
     
-    // --- 친구 요청 수락 API ---
+    /**
+     * 친구 수락
+     * PUT /api/friends/accept
+     */
     @PutMapping("/accept")
     public ResponseEntity<Map<String, Object>> acceptFriend(@RequestBody Map<String, String> request) {
-        String currentUsername = request.get("currentUsername");
-        String requestUsername = request.get("requestUsername");
+        String currentUsername = SecurityContextHolder.getContext().getAuthentication().getName();
+        String requestUsername = request.get("requestUsername"); 
         Map<String, Object> response = new HashMap<>();
 
         Optional<User> currentUserOpt = userRepository.findByUsername(currentUsername);
@@ -133,12 +137,14 @@ public class FriendController {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(response);
         }
 
+        // ⭐️ [수정] "pending" (소문자)
         List<Friend> friendRequests = friendRepository.findByUserAndFriendAndStatus(
-            requestUserOpt.get(), currentUserOpt.get(), "pending");
+                requestUserOpt.get(), currentUserOpt.get(), "pending");
 
         if (!friendRequests.isEmpty()) {
             Friend friendRequest = friendRequests.get(0);
-            friendRequest.setStatus("accepted");
+            // ⭐️ [수정] "accepted" (소문자)
+            friendRequest.setStatus("accepted"); 
             friendRepository.save(friendRequest);
             
             response.put("status", "success");
@@ -151,9 +157,13 @@ public class FriendController {
         }
     }
     
-    // 요청받은 친구목록
-    @GetMapping("/pending/{username}")
-    public ResponseEntity<?> getPendingRequests(@PathVariable String username) {
+    /**
+     * 받은 요청 목록
+     * GET /api/friends/pending
+     */
+    @GetMapping("/pending")
+    public ResponseEntity<?> getPendingRequests() {
+        String username = SecurityContextHolder.getContext().getAuthentication().getName();
         Optional<User> userOpt = userRepository.findByUsername(username);
         if (!userOpt.isPresent()) {
             Map<String, Object> response = new HashMap<>();
@@ -162,31 +172,40 @@ public class FriendController {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(response);
         }
         User user = userOpt.get();
+        // ⭐️ [수정] "pending" (소문자)
         List<User> pendingRequesters = friendRepository.findByFriendAndStatus(user, "pending").stream()
                 .map(Friend::getUser)
                 .collect(Collectors.toList());
         return ResponseEntity.ok(pendingRequesters);
     }
     
-    // --- 내가 보낸 친구 요청 목록 가져오기 API ---
-    @GetMapping("/sent/{username}")
-    public ResponseEntity<?> getSentRequests(@PathVariable String username) {
+    /**
+     * 보낸 요청 목록
+     * GET /api/friends/sent
+     */
+    @GetMapping("/sent")
+    public ResponseEntity<?> getSentRequests() {
+        String username = SecurityContextHolder.getContext().getAuthentication().getName();
         Optional<User> userOpt = userRepository.findByUsername(username);
         if (!userOpt.isPresent()) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("message", "사용자를 찾을 수 없습니다."));
         }
         User user = userOpt.get();
+        // ⭐️ [수정] "pending" (소문자)
         List<User> sentToUsers = friendRepository.findByUserAndStatus(user, "pending").stream()
                 .map(Friend::getFriend)
                 .collect(Collectors.toList());
         return ResponseEntity.ok(sentToUsers);
     }
 
-    // --- 친구 요청 취소 API ---
+    /**
+     * 보낸 요청 취소
+     * DELETE /api/friends/cancel
+     */
     @DeleteMapping("/cancel")
     public ResponseEntity<Map<String, Object>> cancelFriendRequest(@RequestBody Map<String, String> request) {
-        String fromUsername = request.get("fromUsername");
-        String toUsername = request.get("toUsername");
+        String fromUsername = SecurityContextHolder.getContext().getAuthentication().getName();
+        String toUsername = request.get("toUsername"); 
         Map<String, Object> response = new HashMap<>();
 
         Optional<User> fromUserOpt = userRepository.findByUsername(fromUsername);
@@ -197,7 +216,7 @@ public class FriendController {
             response.put("message", "사용자를 찾을 수 없습니다.");
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(response);
         }
-
+        // ⭐️ [수정] "pending" (소문자)
         List<Friend> friendRequests = friendRepository.findByUserAndFriendAndStatus(fromUserOpt.get(), toUserOpt.get(), "pending");
         if (!friendRequests.isEmpty()) {
             friendRepository.deleteAll(friendRequests);
@@ -211,11 +230,15 @@ public class FriendController {
         }
     }
     
-    // --- 친구 요청 거절 API ---
+    /**
+     * 받은 요청 거절
+     * DELETE /api/friends/decline
+     */
     @DeleteMapping("/decline")
-    public ResponseEntity<Map<String, Object>> declineFriendRequest(@RequestBody Map<String, String> request) {
-        String declinerUsername = request.get("declinerUsername");
-        String requesterUsername = request.get("requesterUsername");
+    public ResponseEntity<Map<String, Object>> declineFriendRequest(@RequestBody Map<String, Object> request) {
+        String declinerUsername = SecurityContextHolder.getContext().getAuthentication().getName();
+        // ⭐️ [수정] 안드로이드가 보낸 requesterUsername을 받음
+        String requesterUsername = (String) request.get("requesterUsername"); 
         Map<String, Object> response = new HashMap<>();
 
         Optional<User> declinerUserOpt = userRepository.findByUsername(declinerUsername);
@@ -227,8 +250,9 @@ public class FriendController {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(response);
         }
 
+        // ⭐️ [수정] "pending" (소문자)
         List<Friend> friendRequests = friendRepository.findByUserAndFriendAndStatus(
-            requesterUserOpt.get(), declinerUserOpt.get(), "pending");
+                requesterUserOpt.get(), declinerUserOpt.get(), "pending");
         if (!friendRequests.isEmpty()) {
             friendRepository.deleteAll(friendRequests);
             response.put("status", "success");
@@ -241,15 +265,18 @@ public class FriendController {
         }
     }
     
-    // --- 친구 삭제 API ---
-    @DeleteMapping("/delete")
-    public ResponseEntity<Map<String, Object>> deleteFriend(@RequestBody Map<String, String> request) {
-        String myUsername = request.get("myUsername");
-        String friendUsername = request.get("friendUsername");
+    /**
+     * 친구 삭제 (MapsActivity, FriendsActivity 공용)
+     * DELETE /api/friends/{id}
+     */
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Map<String, Object>> deleteFriend(@PathVariable Long id) {
+        
+        String myUsername = SecurityContextHolder.getContext().getAuthentication().getName();
         Map<String, Object> response = new HashMap<>();
 
         Optional<User> meOpt = userRepository.findByUsername(myUsername);
-        Optional<User> friendOpt = userRepository.findByUsername(friendUsername);
+        Optional<User> friendOpt = userRepository.findById(id); 
 
         if (!meOpt.isPresent() || !friendOpt.isPresent()) {
             response.put("status", "error");
@@ -260,6 +287,7 @@ public class FriendController {
         User me = meOpt.get();
         User friend = friendOpt.get();
 
+        // ⭐️ [수정] "accepted" (소문자)
         List<Friend> friendship1 = friendRepository.findByUserAndFriendAndStatus(me, friend, "accepted");
         List<Friend> friendship2 = friendRepository.findByUserAndFriendAndStatus(friend, me, "accepted");
 
@@ -277,26 +305,12 @@ public class FriendController {
         }
     }
 
-    // --- 친구 목록 가져오기 API ---
-    @GetMapping("/{username}")
-    public ResponseEntity<?> getFriends(@PathVariable String username) {
-        Optional<User> userOpt = userRepository.findByUsername(username);
-        if (!userOpt.isPresent()) {
-            Map<String, Object> response = new HashMap<>();
-            response.put("status", "error");
-            response.put("message", "사용자를 찾을 수 없습니다.");
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(response);
-        }
-
-        User user = userOpt.get();
-        List<User> friends1 = friendRepository.findByUserAndStatus(user, "accepted").stream()
-                .map(Friend::getFriend)
-                .collect(Collectors.toList());
-        List<User> friends2 = friendRepository.findByFriendAndStatus(user, "accepted").stream()
-                .map(Friend::getUser)
-                .collect(Collectors.toList());
-        friends1.addAll(friends2);
-
-        return ResponseEntity.ok(friends1);
+    /**
+     * [사용 안 함] - /api/friends (@GetMapping)이 이 기능을 대체함
+     */
+    @GetMapping("/list")
+    public ResponseEntity<?> getFriends() { 
+        // ... (이 코드는 이제 사용되지 않음) ...
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Deprecated API");
     }
 }

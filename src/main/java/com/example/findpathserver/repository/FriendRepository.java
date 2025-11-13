@@ -37,6 +37,7 @@ public interface FriendRepository extends JpaRepository<Friend, Long> {
     List<Friend> findByUserAndFriend(User user, User friend);
     
     List<Friend> findAllByUserAndStatus(User user, String status);
-    
+ // FriendService가 호출하는 메소드입니다.
+    List<Friend> findAllByFriendAndStatus(User friend, String status);
     
 }

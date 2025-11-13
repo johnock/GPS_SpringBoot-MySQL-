@@ -9,6 +9,7 @@ import org.springframework.stereotype.Service;
 
 import java.util.List;
 import java.util.stream.Collectors;
+import java.util.stream.Stream; 
 
 @Service
 @RequiredArgsConstructor
@@ -16,14 +17,43 @@ public class FriendService {
 
     private final FriendRepository friendRepository;
 
+    /**
+     * 사용자의 '수락된(accepted)' 상태의 모든 친구 목록을 양방향으로 조회합니다.
+     */
     public List<FriendResponse> getFriends(User user) {
-        // "ACCEPTED" 상태인 친구 관계를 모두 찾습니다.
-        // user_id가 나인 경우와 friend_id가 나인 경우 모두 찾아야 할 수 있습니다.
-        // 우선은 user_id 기준 로직입니다.
-        List<Friend> friends = friendRepository.findAllByUserAndStatus(user, "ACCEPTED");
+        
+        // ⭐️ 1. [수정] "findAllByUserAndStatus" -> "findByUserAndStatus"
+        // (FriendController의 getSentRequests가 "findBy"를 사용하므로 이 이름이 맞습니다)
+        List<Friend> friendsAsUser = friendRepository.findByUserAndStatus(user, "accepted");
 
-        return friends.stream()
-                .map(friend -> new FriendResponse(friend.getFriend()))
+        // ⭐️ 2. [수정] "findAllByFriendAndStatus" -> "findByFriendAndStatus"
+        List<Friend> friendsAsFriend = friendRepository.findByFriendAndStatus(user, "accepted");
+
+        // 3. (1)번 리스트 DTO 변환
+        Stream<FriendResponse> responseStream1 = friendsAsUser.stream()
+            .map(friendRelation -> {
+                User friendUser = friendRelation.getFriend(); 
+                return new FriendResponse(
+                    friendUser.getId(), 
+                    friendUser.getUsername(), 
+                    friendUser.getProfileImageUrl() 
+                );
+            });
+
+        // 4. (2)번 리스트 DTO 변환
+        Stream<FriendResponse> responseStream2 = friendsAsFriend.stream()
+            .map(friendRelation -> {
+                User friendUser = friendRelation.getUser(); 
+                return new FriendResponse(
+                    friendUser.getId(), 
+                    friendUser.getUsername(), 
+                    friendUser.getProfileImageUrl()
+                );
+            });
+
+        // 5. 두 스트림을 하나로 합침
+        return Stream.concat(responseStream1, responseStream2)
+                .distinct() 
                 .collect(Collectors.toList());
     }
 }

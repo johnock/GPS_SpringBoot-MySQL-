@@ -11,6 +11,10 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import com.example.findpathserver.dto.GroupListResponse;
 
+import org.springframework.http.HttpStatus;
+import org.springframework.security.core.Authentication;
+import org.springframework.web.bind.annotation.*;
+
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -165,4 +169,28 @@ public class GroupController {
 		
 		return ResponseEntity.ok(rules);
 	}
+	
+	// ▼▼▼ [ 3. 이 메소드 전체를 클래스 내부에 새로 추가합니다 ] ▼▼▼
+    /**
+     * 그룹을 삭제합니다. (그룹 생성자만 가능)
+     * @param groupId URL 경로에서 받은 그룹 ID
+     * @param authentication 현재 로그인한 사용자 정보
+     * @return 성공 또는 실패 메시지
+     */
+    @DeleteMapping("/{groupId}")
+    public ResponseEntity<?> deleteGroup(@PathVariable Long groupId, Authentication authentication) {
+        // 현재 로그인한 사용자 이름 가져오기
+        String username = authentication.getName(); 
+        
+        try {
+            // GroupService의 deleteGroup 로직 호출
+            groupService.deleteGroup(groupId, username);
+            // 성공 시
+            return ResponseEntity.ok().body(Map.of("message", "Group deleted successfully"));
+        } catch (Exception e) {
+            // 실패 시 (권한이 없거나, 그룹/유저가 존재하지 않는 경우)
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("error", e.getMessage()));
+        }
+    }
+    // ▲▲▲ [ 여기까지 추가 ] ▲▲▲
 }

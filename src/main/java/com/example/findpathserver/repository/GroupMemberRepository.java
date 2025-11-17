@@ -9,8 +9,17 @@ import org.springframework.stereotype.Repository;
 import java.util.List;
 import java.util.Optional;
 
+import org.springframework.transaction.annotation.Transactional; // <-- [ 1. IMPORT 추가 ]
+
 @Repository
 public interface GroupMemberRepository extends JpaRepository<GroupMember, Long> {
+	
+	// ▼▼▼ [ 2. 이 두 줄을 추가 ] ▼▼▼
+    int countByGroup(Group group); // [오류 1번 해결]
+
+    @Transactional
+    void deleteByGroup(Group group); // [오류 2번 해결]
+    // ▲▲▲ [ 여기까지 추가 ] ▲▲▲
 
     // ⭐ [추가] User를 기준으로 가입된 그룹 목록을 조회
     List<GroupMember> findByUser(User user);
@@ -20,4 +29,6 @@ public interface GroupMemberRepository extends JpaRepository<GroupMember, Long> 
 
     // Group과 User를 기준으로 특정 멤버십을 조회
     Optional<GroupMember> findByGroupAndUser(Group group, User user);
+    
+    
 }

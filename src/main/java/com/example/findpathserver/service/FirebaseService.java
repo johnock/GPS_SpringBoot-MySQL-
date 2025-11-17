@@ -50,6 +50,36 @@ public class FirebaseService {
             System.err.println("❌ Firebase Admin SDK 초기화 실패: " + e.getMessage());
         }
     }
+    
+ // ▼▼▼ [ 이 메소드 전체를 새로 추가합니다 ] ▼▼▼
+
+    /**
+     * 그룹 삭제 시 Firebase Realtime DB의 관련 데이터를 모두 삭제합니다.
+     * (GroupService에서 호출될 예정)
+     *
+     * @param groupId 삭제할 그룹의 ID (String)
+     */
+    public void deleteGroupData(String groupId) {
+        try {
+            // 1. 실시간 위치 정보 노드 삭제
+        	// 1. 실시간 위치 정보 노드 삭제
+            database.getReference("group_locations").child(groupId).removeValueAsync();
+
+            // 2. 목적지 정보 노드 삭제
+            database.getReference("group_destinations").child(groupId).removeValueAsync();
+            
+            // 3. (만약 채팅방도 있다면) 채팅방 노드 삭제
+            database.getReference("group_chats").child(groupId).removeValueAsync();
+
+            System.out.println("Firebase data for group " + groupId + " successfully marked for deletion.");
+
+        } catch (Exception e) {
+            // Firebase 작업 실패가 MySQL 롤백을 유발하지 않도록 로그만 남깁니다.
+            System.err.println("Failed to delete Firebase data for group: " + groupId + ", Error: " + e.getMessage());
+        }
+    }
+
+    // ▲▲▲ [ 여기까지 추가 ] ▲▲▲
 
     /**
      * Firebase Realtime Database에 사용자의 활성 토큰을 업데이트합니다.
@@ -80,4 +110,7 @@ public class FirebaseService {
             System.err.println("❌ Firebase에 토큰 업데이트 실패 (UserId: " + userId + "): " + e.getMessage());
         }
     }
+    
+    
+    
 }

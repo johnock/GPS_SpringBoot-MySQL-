@@ -9,6 +9,8 @@ import org.springframework.stereotype.Repository;
 import java.util.List;
 import java.util.Optional;
 
+import org.springframework.transaction.annotation.Transactional; // <-- [ 1. IMPORT 추가 ]
+
 @Repository
 public interface SharingRuleRepository extends JpaRepository<SharingRule, Long> {
 
@@ -20,6 +22,12 @@ public interface SharingRuleRepository extends JpaRepository<SharingRule, Long> 
     List<SharingRule> findByGroup_IdAndTarget_Id(Long groupId, Long targetId);
     
     List<SharingRule> findByGroup_IdAndSharer_Id(Long groupId, Long sharerId);
+    
+ // ▼▼▼ [ 2. 이 두 줄을 추가 ] ▼▼▼
+    @Transactional
+    void deleteByGroup(Group group); // [오류 3번 해결]
+    // ▲▲▲ [ 여기까지 추가 ] ▲▲▲
+
     
     
 }

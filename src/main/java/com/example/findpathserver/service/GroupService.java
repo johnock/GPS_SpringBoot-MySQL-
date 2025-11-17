@@ -95,21 +95,33 @@ public class GroupService {
         groupMemberRepository.save(groupMember);
     }
 
-    // getMyGroups 메소드
+    // ▼▼▼ [수정됨] 참여자 명단(Member IDs)을 포함하여 그룹 목록 반환 ▼▼▼
     public List<GroupListResponse> getMyGroups(User user) {
         List<GroupMember> myGroupMemberships = groupMemberRepository.findByUser(user);
+        
         return myGroupMemberships.stream()
-                // ▼▼▼ [수정] DTO 생성자에 memberCount를 전달하도록 수정 ▼▼▼
                 .map(groupMember -> {
                     Group group = groupMember.getGroup();
-                    // 각 그룹의 멤버 수를 계산
-                    int memberCount = groupMemberRepository.countByGroup(group); 
-                    // 새 생성자 (Group, int) 호출 (GroupListResponse.java가 수정되었다고 가정)
-                    return new GroupListResponse(group, memberCount); 
+
+                    // 1. 그룹의 모든 멤버 정보를 DB에서 가져옵니다.
+                    List<GroupMember> groupMembers = groupMemberRepository.findByGroup(group);
+
+                    // 2. 멤버들의 '아이디(Username)'만 뽑아서 리스트로 만듭니다.
+                    List<String> memberIdList = groupMembers.stream()
+                            .map(member -> member.getUser().getUsername()) // 사용자 아이디 추출
+                            .collect(Collectors.toList());
+
+                    // 3. DTO 생성 (인원수는 리스트 사이즈로 계산)
+                    GroupListResponse response = new GroupListResponse(group, groupMembers.size());
+                    
+                    // 4. [핵심] 멤버 명단 리스트를 DTO에 담아줍니다.
+                    response.setMemberIds(memberIdList);
+
+                    return response; 
                 })
-                // ▲▲▲ [수정 완료] ▲▲▲
                 .collect(Collectors.toList());
     }
+    // ▲▲▲ [수정 완료] ▲▲▲
 
     // ▼▼▼ [추가] 방장만 그룹을 삭제할 수 있는 메소드 ▼▼▼
     /**

@@ -5,6 +5,8 @@ import lombok.Getter;
 import lombok.Setter;
 
 import java.time.LocalDateTime;
+import java.util.List; // [1] List 사용을 위해 import 추가
+
 
 @Getter
 @Setter
@@ -20,6 +22,10 @@ public class GroupListResponse {
     private Double destinationLng;
     private int memberCount;
     private String createdByUsername;
+    // ▼▼▼ [2] 참여자 아이디 목록 필드 추가 ▼▼▼
+    // (Service에서 setMemberIds()로 값을 넣어줄 공간입니다)
+    private List<String> memberIds;
+    // ▲▲▲ [여기까지 추가] ▲▲▲
 
     // Group 엔티티를 이 DTO로 변환해주는 생성자
     public GroupListResponse(Group group, int memberCount) {

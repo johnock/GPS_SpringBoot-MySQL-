@@ -22,10 +22,14 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
+import org.springframework.scheduling.annotation.Scheduled; // ⭐️ [추가]
 
 
 @Service
 @RequiredArgsConstructor
+
+
+
 public class GroupService {
 
     private final GroupRepository groupRepository;
@@ -131,50 +135,45 @@ public class GroupService {
      * @param username 요청한 사용자의 이름
      * @throws RuntimeException 그룹이 없거나, 유저가 없거나, 방장이 아닐 경우
      */
+    /**
+     * 사용자가 요청한 그룹 삭제 (기존 deleteGroup 수정)
+     */
     @Transactional
     public void deleteGroup(Long groupId, String username) {
-        // 1. 요청한 사용자 찾기
         User user = userRepository.findByUsername(username)
                 .orElseThrow(() -> new RuntimeException("User not found"));
                 
-        // 2. 삭제할 그룹 찾기
         Group group = groupRepository.findById(groupId)
                 .orElseThrow(() -> new RuntimeException("Group not found"));
 
-        // 3. [핵심] 방장(생성자)인지 확인
-        // Group.java 모델의 'createdBy' 필드를 사용
-        if (group.getCreator() == null || !group.getCreator().getId().equals(user.getId())) { // <-- [이렇게 수정]
+        // 방장 권한 확인
+        if (group.getCreator() == null || !group.getCreator().getId().equals(user.getId())) {
             throw new RuntimeException("Only the group owner can delete this group.");
         }
         
-        
-        // ▼▼▼ [ 2. 이 부분을 MySQL 삭제 *전에* 새로 추가합니다 ] ▼▼▼
-        // 4. Firebase Realtime DB 데이터 삭제 (group_locations, group_destinations)
-        //    (MySQL 트랜잭션과 연동되지 않으므로, 실패해도 롤백되지는 않습니다.)
-        firebaseService.deleteGroupData(String.valueOf(groupId));
-        // ▲▲▲ [ 2. 추가 완료 ] ▲▲▲
-        // 4. (중요) 자식 테이블 레코드 먼저 삭제 (FK 제약조건)
-        // 4-1. 공유 규칙 삭제
-        sharingRuleRepository.deleteByGroup(group);
-        
-        // 4-2. 그룹 멤버 삭제
-        groupMemberRepository.deleteByGroup(group);
-
-        // 4-3. 그룹 위치 정보 삭제
-        userLocationRepository.deleteByGroup(group);
-        
-        // TODO: FirebaseService를 주입받아 Realtime DB 데이터(group_locations, group_destinations)도 삭제하는 로직이 필요합니다.
-        // 예: firebaseService.deleteGroupLocations(String.valueOf(groupId));
-        //     firebaseService.deleteDestination(String.valueOf(groupId));
-
-        // 5. 그룹 본체 삭제
-        groupRepository.delete(group);
+        // ⭐️ [수정] 공통 삭제 로직 호출
+        deleteGroupDataInternal(group);
     }
-    // ▲▲▲ [추가 완료] ▲▲▲
+    
+ // ⭐️ [추가] 실제 삭제를 수행하는 내부 메서드 (중복 제거용)
+    private void deleteGroupDataInternal(Group group) {
+        // 1. Firebase 데이터 삭제
+        try {
+            firebaseService.deleteGroupData(String.valueOf(group.getId()));
+        } catch (Exception e) {
+            System.err.println("Firebase 삭제 중 오류 (무시하고 진행): " + e.getMessage());
+        }
 
-// -----------------------------------------------------------
-// ⭐ [추가/수정] 클라이언트의 요청을 처리하는 핵심 로직
-// -----------------------------------------------------------
+        // 2. 연관 데이터 삭제 (MySQL)
+        sharingRuleRepository.deleteByGroup(group);
+        groupMemberRepository.deleteByGroup(group);
+        userLocationRepository.deleteByGroup(group);
+
+        // 3. 그룹 본체 삭제
+        groupRepository.delete(group);
+        
+        System.out.println("✅ 그룹 삭제 완료: ID " + group.getId());
+    }
 
     /**
      * Sharer들이 나(Target)에게 설정한 위치 공유 규칙 목록을 반환합니다. (클라이언트 맵 필터링용 - Incoming)
@@ -259,6 +258,12 @@ public class GroupService {
         // ... (기존 코드와 동일) ...
         Group group = groupRepository.findById(groupId)
                 .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 그룹입니다."));
+        
+        // ⭐️ [추가] 그룹 종료 시간이 지났는지 확인
+        if (group.getEndTime() != null && group.getEndTime().isBefore(LocalDateTime.now())) {
+            // 시간이 지났으면 '존재하지 않는 그룹'으로 처리 (또는 별도 예외 발생)
+            throw new IllegalArgumentException("이미 종료된 그룹입니다.");
+        }
 
         List<GroupMember> memberships = groupMemberRepository.findByGroup(group);
         
@@ -320,5 +325,23 @@ public class GroupService {
         
         rule.setSharingAllowed(allow);
         sharingRuleRepository.save(rule);
+    }
+    
+    // ⭐️ [추가] 1분마다 실행되어 종료된 그룹을 삭제하는 스케줄러
+    // ------------------------------------------------------------------
+    @Scheduled(fixedRate = 60000) // 60000ms = 1분 간격 실행
+    @Transactional
+    public void deleteExpiredGroups() {
+        // 1. 현재 시간보다 종료 시간이 지난 그룹들을 찾음
+        List<Group> expiredGroups = groupRepository.findByEndTimeBefore(LocalDateTime.now());
+
+        if (!expiredGroups.isEmpty()) {
+            System.out.println("🧹 [Auto-Delete] 만료된 그룹 " + expiredGroups.size() + "개를 삭제합니다.");
+            
+            for (Group group : expiredGroups) {
+                // 권한 검사 없이 강제 삭제 (시스템에 의한 삭제이므로)
+                deleteGroupDataInternal(group);
+            }
+        }
     }
 }

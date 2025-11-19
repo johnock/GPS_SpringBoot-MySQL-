@@ -50,12 +50,14 @@ public class SecurityConfig {
         http.csrf(csrf -> csrf.disable())
                 .authorizeHttpRequests(auth -> auth
                         // 🟢 1. 인증 없이 "무조건" 허용되어야 하는 경로들
+                		.requestMatchers("/api/users/signup", "/login").permitAll()
                         .requestMatchers(
                                 // --- 정적 리소스 ---
                                 "/static/**",
                                 "/media/**",
                                 "/resources/**",
                                 "/images/**",
+                                "/error",
                                 
                                 // --- 인증/회원가입 관련 API ---
                                 "/login",
